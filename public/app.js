@@ -15,6 +15,8 @@ const downloadButton = document.querySelector("#downloadButton");
 const tabButtons = document.querySelectorAll(".tab");
 const codePanel = document.querySelector("#codePanel");
 const previewPanel = document.querySelector("#previewPanel");
+const previewMeta = document.querySelector("#previewMeta");
+const previewStage = document.querySelector("#previewStage");
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
@@ -89,6 +91,7 @@ async function handleFile(file) {
   imagePreview.src = screenshotDataUrl;
   fileName.textContent = `${file.name} (${screenshotWidth}x${screenshotHeight}, ${Math.round(file.size / 1024)} KB)`;
   imagePreviewCard.hidden = false;
+  updatePreviewViewport();
   generateButton.disabled = false;
   setStatus("Screenshot loaded. Add optional notes, then generate.", "success");
 }
@@ -107,9 +110,27 @@ function showTab(tabName) {
   });
 }
 
+function updatePreviewViewport() {
+  if (!screenshotWidth || !screenshotHeight) {
+    previewMeta.textContent = "Upload a screenshot to set the preview viewport.";
+    previewStage.style.removeProperty("--preview-width");
+    previewStage.style.removeProperty("--preview-height");
+    htmlPreview.removeAttribute("width");
+    htmlPreview.removeAttribute("height");
+    return;
+  }
+
+  previewMeta.textContent = `Preview viewport: ${screenshotWidth}x${screenshotHeight}px to match the uploaded screenshot. Scroll inside this panel if the artboard is larger than the available space.`;
+  previewStage.style.setProperty("--preview-width", `${screenshotWidth}px`);
+  previewStage.style.setProperty("--preview-height", `${screenshotHeight}px`);
+  htmlPreview.setAttribute("width", String(screenshotWidth));
+  htmlPreview.setAttribute("height", String(screenshotHeight));
+}
+
 function updateOutput(html) {
   generatedHtml = html;
   codeOutput.innerHTML = escapeHtml(html);
+  updatePreviewViewport();
   htmlPreview.srcdoc = html;
   copyButton.disabled = false;
   downloadButton.disabled = false;

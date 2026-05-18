@@ -93,7 +93,7 @@ function buildPrompt({ instructions = "", width = null, height = null } = {}) {
     ? `\nAdditional user instructions:\n${instructions}\n`
     : "";
   const dimensions = width && height
-    ? `\nScreenshot dimensions: ${width}px wide by ${height}px tall. Treat these as the target artboard dimensions for the initial viewport.\n`
+    ? `\nScreenshot dimensions: ${width}px wide by ${height}px tall. Build the primary artboard at exactly ${width}px by ${height}px before adding any responsive behavior.\n`
     : "";
 
   return `You are a meticulous senior frontend engineer converting a design screenshot into production-ready frontend code.
@@ -103,11 +103,13 @@ Create a single, complete HTML document that visually recreates the screenshot a
 Fidelity requirements:
 - Return only the complete HTML document.
 - Match the screenshot's visible artboard first; avoid inventing new content or changing the composition.
+- When screenshot dimensions are provided, create a top-level artboard/page frame that is exactly that width and height in CSS pixels. The design must match at that viewport size.
+- Use absolute positioning only where it improves visual fidelity. Otherwise use CSS grid/flex with explicit pixel measurements inferred from the screenshot.
 - Recreate the layout hierarchy, alignment, whitespace, border radii, shadows, gradients, colors, and typography from the image.
 - Estimate sizes, offsets, line heights, font weights, and spacing in pixels from the screenshot.
 - Use CSS shapes, gradients, emoji-free placeholders, and inline SVG/data-URI patterns when image assets or icons are visible but unavailable.
 - If text is legible, preserve it exactly. If text is not legible, use similar-length placeholder text so the layout still matches.
-- Make the initial viewport match the screenshot composition; add responsive behavior only after preserving the desktop/mobile screenshot view.
+- Make the initial viewport match the screenshot composition exactly; add responsive behavior only after preserving the provided screenshot view.
 - Include accessible labels where they do not alter the visual output.
 - Use CSS reset rules so browser defaults do not distort spacing.${extraInstructions}`;
 }

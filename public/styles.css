@@ -320,6 +320,40 @@ iframe {
   background: white;
 }
 
+.preview-meta {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.preview-stage {
+  display: grid;
+  width: 100%;
+  min-height: 420px;
+  place-items: start center;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.035) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.035) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.035) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.035) 75%),
+    #090d18;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+  background-size: 20px 20px;
+  padding: 18px;
+}
+
+.preview-stage iframe {
+  width: var(--preview-width, 100%);
+  height: var(--preview-height, 720px);
+  min-height: 0;
+  border-color: rgba(255, 255, 255, 0.28);
+  border-radius: 0;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.34);
+}
+
 .status[data-kind="success"] {
   color: var(--success);
 }
