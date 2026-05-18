@@ -16,6 +16,8 @@ const tabButtons = document.querySelectorAll(".tab");
 const codePanel = document.querySelector("#codePanel");
 const previewPanel = document.querySelector("#previewPanel");
 
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+
 let screenshotDataUrl = "";
 let generatedHtml = "";
 
@@ -56,6 +58,11 @@ async function handleFile(file) {
 
   if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
     setStatus("Please upload a PNG, JPG, or WebP screenshot.", "error");
+    return;
+  }
+
+  if (file.size > MAX_IMAGE_BYTES) {
+    setStatus("Please upload a screenshot smaller than 20 MB.", "error");
     return;
   }
 

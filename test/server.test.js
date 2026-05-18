@@ -113,3 +113,32 @@ test("createServer handles generation through an injected fetch client", async (
   const body = await response.json();
   assert.match(body.html, /Generated route HTML/);
 });
+
+test("createServer returns JSON when the request body is too large", async (t) => {
+  const server = createServer({
+    apiKey: "test-key",
+    maxBodyBytes: 100,
+    fetchImpl: async () => {
+      throw new Error("fetch should not be called for oversized bodies");
+    }
+  });
+
+  t.after(() => server.close());
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+
+  const { port } = server.address();
+  const response = await fetch(`http://127.0.0.1:${port}/api/generate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      imageDataUrl: `data:image/png;base64,${"a".repeat(200)}`
+    })
+  });
+
+  assert.equal(response.status, 413);
+  const body = await response.json();
+  assert.match(body.error, /too large/);
+});

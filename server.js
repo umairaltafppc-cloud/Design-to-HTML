@@ -4,7 +4,7 @@ const fs = require("node:fs/promises");
 
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, "public");
-const MAX_BODY_BYTES = 12 * 1024 * 1024;
+const MAX_BODY_BYTES = 30 * 1024 * 1024;
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
 const MIME_TYPES = {
@@ -31,19 +31,30 @@ function sendJson(res, statusCode, payload) {
 function parseJsonBody(req, maxBytes = MAX_BODY_BYTES) {
   return new Promise((resolve, reject) => {
     let size = 0;
+    let tooLarge = false;
     const chunks = [];
 
     req.on("data", (chunk) => {
       size += chunk.length;
-      if (size > maxBytes) {
-        reject(Object.assign(new Error("Request body is too large."), { statusCode: 413 }));
-        req.destroy();
+      if (tooLarge) {
         return;
       }
+
+      if (size > maxBytes) {
+        tooLarge = true;
+        chunks.length = 0;
+        return;
+      }
+
       chunks.push(chunk);
     });
 
     req.on("end", () => {
+      if (tooLarge) {
+        reject(Object.assign(new Error("Request body is too large."), { statusCode: 413 }));
+        return;
+      }
+
       try {
         const raw = Buffer.concat(chunks).toString("utf8");
         resolve(raw ? JSON.parse(raw) : {});
