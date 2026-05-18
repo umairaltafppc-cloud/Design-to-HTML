@@ -248,6 +248,7 @@ function isLikelyBlankHtml(html) {
   const bodyMatch = normalized.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
   const bodyHtml = bodyMatch ? bodyMatch[1] : normalized;
   const visibleText = stripHtmlForAnalysis(bodyHtml);
+  const hasEnoughVisibleText = visibleText.length >= 8;
   const hasMediaOrShapes = /<(img|svg|canvas|picture)\b/i.test(bodyHtml);
   const hasCommonContent = /<(h[1-6]|p|a|button|section|article|main|nav|header|footer|span|div)\b/i.test(bodyHtml);
   const hasVisualCss = /(background|gradient|box-shadow|border|color|transform|position|display\s*:|grid|flex|width\s*:|height\s*:)/i.test(html);
@@ -256,7 +257,10 @@ function isLikelyBlankHtml(html) {
     && visibleText.length < 12
     && !hasMediaOrShapes;
 
-  return hasOnlyWhitespaceBody || (!hasMediaOrShapes && !hasCommonContent) || (!hasVisualCss && visibleText.length < 12) || hasMostlyEmptyWhitePage;
+  return hasOnlyWhitespaceBody
+    || (!hasEnoughVisibleText && !hasMediaOrShapes && !hasCommonContent)
+    || (!hasVisualCss && !hasEnoughVisibleText)
+    || hasMostlyEmptyWhitePage;
 }
 
 function buildBlankRetryInstructions(instructions = "") {
