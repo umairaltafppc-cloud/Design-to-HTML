@@ -10,6 +10,7 @@ const {
   createServer,
   extractGeneratedHtml,
   generateHtml,
+  isLikelyBlankHtml,
   validateGenerateRequest
 } = require("../server");
 
@@ -122,6 +123,18 @@ test("extractGeneratedHtml supports nested response output content", () => {
   });
 
   assert.match(html, /Generated/);
+});
+
+test("isLikelyBlankHtml detects empty or plain white output", () => {
+  assert.equal(isLikelyBlankHtml("<!doctype html><html><body></body></html>"), true);
+  assert.equal(
+    isLikelyBlankHtml("<!doctype html><html><head><style>body{background:white}</style></head><body><div></div></body></html>"),
+    true
+  );
+  assert.equal(
+    isLikelyBlankHtml("<!doctype html><html><head><style>.hero{background:#111;color:#fff;padding:48px}.cta{border:1px solid #fff}</style></head><body><main class=\"hero\"><h1>Launch faster</h1><button class=\"cta\">Get started</button></main></body></html>"),
+    false
+  );
 });
 
 test("createServer handles generation through an injected fetch client", async (t) => {
@@ -250,4 +263,31 @@ test("generateHtml keeps exact clone mode to one request by default", async () =
   assert.equal(html, "<!doctype html><html><body>One request clone</body></html>");
   assert.equal(calls.length, 1);
   assert.match(calls[0].input[0].content[0].text, /silently analyze the screenshot/);
+});
+
+test("generateHtml retries when the first response looks blank", async () => {
+  const calls = [];
+  const html = await generateHtml({
+    imageDataUrl: SAMPLE_IMAGE,
+    instructions: "Clone the page.",
+    width: 1200,
+    height: 900,
+    apiKey: "test-key",
+    model: "test-model",
+    fetchImpl: async (url, options) => {
+      calls.push(JSON.parse(options.body));
+      return {
+        ok: true,
+        json: async () => ({
+          output_text: calls.length === 1
+            ? "<!doctype html><html><head><style>body{background:white}</style></head><body></body></html>"
+            : "<!doctype html><html><head><style>.hero{background:#101827;color:white;padding:40px}.card{border:1px solid #fff}</style></head><body><main class=\"hero\"><h1>Visible landing page</h1><button>Start</button><section class=\"card\">Feature</section></main></body></html>"
+        })
+      };
+    }
+  });
+
+  assert.match(html, /Visible landing page/);
+  assert.equal(calls.length, 2);
+  assert.match(calls[1].input[0].content[0].text, /previous HTML rendered as a blank white page/);
 });

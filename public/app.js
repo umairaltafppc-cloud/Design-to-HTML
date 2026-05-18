@@ -235,6 +235,10 @@ async function requestGeneration({ refine = false } = {}) {
       throw new Error(body.error || "Generation failed.");
     }
 
+    if (!body.html || body.html.trim().length < 80) {
+      throw new Error("The generated HTML looked blank. Add notes describing the visible layout and try again.");
+    }
+
     updateOutput(body.html);
     setStatus(refine ? "HTML refined successfully." : "Landing page HTML generated successfully.", "success");
   } catch (error) {

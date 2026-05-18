@@ -137,6 +137,7 @@ Fidelity requirements:
 - Return only the complete HTML document.
 - Before writing code, silently analyze the screenshot as a visual spec: section order, exact text, colors, spacing, typography, assets, and component dimensions.
 - Match the screenshot's visible landing-page artboard first; avoid inventing new content or changing the composition.
+- The rendered first viewport must never be blank or plain white unless the screenshot itself is blank. Include visible text, sections, cards, buttons, images/placeholders, or decorative shapes from the screenshot.
 - Preserve all visible text exactly when readable, including line breaks and CTA labels.
 - When screenshot dimensions are provided, create a top-level artboard/page frame that is exactly that width and height in CSS pixels. The design must match at that viewport size.
 - Use absolute positioning only where it improves visual fidelity. Otherwise use CSS grid/flex with explicit pixel measurements inferred from the screenshot.
@@ -229,6 +230,40 @@ function extractGeneratedHtml(responseBody) {
   return stripMarkdownFence(extractResponseText(responseBody));
 }
 
+function stripHtmlForAnalysis(html) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isLikelyBlankHtml(html) {
+  if (typeof html !== "string" || html.trim().length < 80) {
+    return true;
+  }
+
+  const normalized = html.toLowerCase();
+  const bodyMatch = normalized.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
+  const bodyHtml = bodyMatch ? bodyMatch[1] : normalized;
+  const visibleText = stripHtmlForAnalysis(bodyHtml);
+  const hasMediaOrShapes = /<(img|svg|canvas|picture)\b/i.test(bodyHtml);
+  const hasCommonContent = /<(h[1-6]|p|a|button|section|article|main|nav|header|footer|span|div)\b/i.test(bodyHtml);
+  const hasVisualCss = /(background|gradient|box-shadow|border|color|transform|position|display\s*:|grid|flex|width\s*:|height\s*:)/i.test(html);
+  const hasOnlyWhitespaceBody = bodyHtml.replace(/<!--[\s\S]*?-->/g, "").replace(/&nbsp;/g, "").trim().length === 0;
+  const hasMostlyEmptyWhitePage = /background(?:-color)?\s*:\s*(white|#fff|#ffffff|rgb\(255,\s*255,\s*255\))/i.test(html)
+    && visibleText.length < 12
+    && !hasMediaOrShapes;
+
+  return hasOnlyWhitespaceBody || (!hasMediaOrShapes && !hasCommonContent) || (!hasVisualCss && visibleText.length < 12) || hasMostlyEmptyWhitePage;
+}
+
+function buildBlankRetryInstructions(instructions = "") {
+  const prefix = instructions ? `${instructions}\n\n` : "";
+  return `${prefix}The previous HTML rendered as a blank white page. Regenerate the landing page so the first viewport contains visible, high-contrast content matching the screenshot: header/navigation, hero section, readable text, CTA buttons, cards/images/placeholders, backgrounds, borders, and spacing. Do not return an empty body, a plain white page, or invisible white-on-white content.`;
+}
+
 async function postOpenAIRequest({ payload, apiKey, fetchImpl }) {
   const response = await fetchImpl("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -269,7 +304,33 @@ async function generateHtml({ imageDataUrl, instructions, width, height, existin
     payload: buildOpenAIRequest({ imageDataUrl, instructions, width, height, existingHtml, visualSpec, model })
   });
 
-  return extractGeneratedHtml(htmlResponseBody);
+  const html = extractGeneratedHtml(htmlResponseBody);
+  if (!isLikelyBlankHtml(html)) {
+    return html;
+  }
+
+  const retryResponseBody = await postOpenAIRequest({
+    apiKey,
+    fetchImpl,
+    payload: buildOpenAIRequest({
+      imageDataUrl,
+      instructions: buildBlankRetryInstructions(instructions),
+      width,
+      height,
+      existingHtml: html,
+      visualSpec,
+      model
+    })
+  });
+  const retryHtml = extractGeneratedHtml(retryResponseBody);
+  if (isLikelyBlankHtml(retryHtml)) {
+    throw Object.assign(
+      new Error("The AI returned a blank-looking page. Try a clearer screenshot or add notes describing the visible hero, text, colors, and sections."),
+      { statusCode: 502 }
+    );
+  }
+
+  return retryHtml;
 }
 
 async function handleGenerate(req, res, deps = {}) {
@@ -347,5 +408,6 @@ module.exports = {
   extractGeneratedHtml,
   extractResponseText,
   generateHtml,
+  isLikelyBlankHtml,
   validateGenerateRequest
 };
