@@ -1,9 +1,11 @@
 const assert = require("node:assert/strict");
+const { once } = require("node:events");
 const test = require("node:test");
 
 const {
   buildOpenAIRequest,
   buildPrompt,
+  createServer,
   extractGeneratedHtml,
   validateGenerateRequest
 } = require("../server");
@@ -69,4 +71,45 @@ test("extractGeneratedHtml supports nested response output content", () => {
   });
 
   assert.match(html, /Generated/);
+});
+
+test("createServer handles generation through an injected fetch client", async (t) => {
+  const server = createServer({
+    apiKey: "test-key",
+    fetchImpl: async (url, options) => {
+      assert.equal(url, "https://api.openai.com/v1/responses");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer test-key");
+
+      const payload = JSON.parse(options.body);
+      assert.equal(payload.input[0].content[1].image_url, SAMPLE_IMAGE);
+
+      return {
+        ok: true,
+        json: async () => ({
+          output_text: "<!doctype html><html><body>Generated route HTML</body></html>"
+        })
+      };
+    }
+  });
+
+  t.after(() => server.close());
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+
+  const { port } = server.address();
+  const response = await fetch(`http://127.0.0.1:${port}/api/generate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      imageDataUrl: SAMPLE_IMAGE,
+      instructions: "Use semantic HTML."
+    })
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.match(body.html, /Generated route HTML/);
 });
