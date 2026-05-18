@@ -5,8 +5,11 @@ const test = require("node:test");
 const {
   buildOpenAIRequest,
   buildPrompt,
+  buildVisualSpecPrompt,
+  buildVisualSpecRequest,
   createServer,
   extractGeneratedHtml,
+  generateHtml,
   validateGenerateRequest
 } = require("../server");
 
@@ -24,6 +27,7 @@ test("validateGenerateRequest accepts supported image data urls", () => {
   assert.equal(result.instructions, "Use a dark theme.");
   assert.equal(result.width, 1440);
   assert.equal(result.height, 1024);
+  assert.equal(result.exactClone, true);
 });
 
 test("validateGenerateRequest rejects unsupported image payloads", () => {
@@ -65,6 +69,34 @@ test("buildOpenAIRequest sends screenshot and prompt to responses API shape", ()
   assert.equal(payload.input[0].content[1].type, "input_image");
   assert.equal(payload.input[0].content[1].image_url, SAMPLE_IMAGE);
   assert.equal(payload.max_output_tokens, 12000);
+});
+
+test("buildVisualSpecRequest asks for a concrete landing page spec", () => {
+  const payload = buildVisualSpecRequest({
+    imageDataUrl: SAMPLE_IMAGE,
+    instructions: "Clone the hero exactly.",
+    width: 1440,
+    height: 1200,
+    model: "test-model"
+  });
+
+  assert.equal(payload.model, "test-model");
+  assert.equal(payload.input[0].content[0].type, "input_text");
+  assert.match(payload.input[0].content[0].text, /detailed visual implementation spec/);
+  assert.match(payload.input[0].content[0].text, /1440px wide by 1200px tall/);
+  assert.equal(payload.input[0].content[1].image_url, SAMPLE_IMAGE);
+});
+
+test("buildVisualSpecPrompt includes user notes", () => {
+  const prompt = buildVisualSpecPrompt({
+    instructions: "Use the exact navy background.",
+    width: 1280,
+    height: 900
+  });
+
+  assert.match(prompt, /design QA analyst/);
+  assert.match(prompt, /1280px wide by 900px tall/);
+  assert.match(prompt, /exact navy background/);
 });
 
 test("extractGeneratedHtml supports output_text", () => {
@@ -126,7 +158,8 @@ test("createServer handles generation through an injected fetch client", async (
       imageDataUrl: SAMPLE_IMAGE,
       instructions: "Use semantic HTML.",
       width: 1024,
-      height: 768
+      height: 768,
+      exactClone: false
     })
   });
 
@@ -162,4 +195,32 @@ test("createServer returns JSON when the request body is too large", async (t) =
   assert.equal(response.status, 413);
   const body = await response.json();
   assert.match(body.error, /too large/);
+});
+
+test("generateHtml runs a visual spec pass in exact clone mode", async () => {
+  const calls = [];
+  const html = await generateHtml({
+    imageDataUrl: SAMPLE_IMAGE,
+    instructions: "Clone the landing page exactly.",
+    width: 1440,
+    height: 1000,
+    apiKey: "test-key",
+    model: "test-model",
+    fetchImpl: async (url, options) => {
+      calls.push(JSON.parse(options.body));
+      return {
+        ok: true,
+        json: async () => ({
+          output_text: calls.length === 1
+            ? "Visual spec: navy hero, centered headline, two CTA buttons."
+            : "<!doctype html><html><body>Exact clone</body></html>"
+        })
+      };
+    }
+  });
+
+  assert.equal(html, "<!doctype html><html><body>Exact clone</body></html>");
+  assert.equal(calls.length, 2);
+  assert.match(calls[0].input[0].content[0].text, /visual implementation spec/);
+  assert.match(calls[1].input[0].content[0].text, /Visual spec: navy hero/);
 });

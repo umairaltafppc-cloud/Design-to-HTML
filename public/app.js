@@ -6,6 +6,7 @@ const imagePreviewCard = document.querySelector("#imagePreviewCard");
 const imagePreview = document.querySelector("#imagePreview");
 const fileName = document.querySelector("#fileName");
 const instructions = document.querySelector("#instructions");
+const exactClone = document.querySelector("#exactClone");
 const generateButton = document.querySelector("#generateButton");
 const refineButton = document.querySelector("#refineButton");
 const statusMessage = document.querySelector("#statusMessage");
@@ -16,8 +17,13 @@ const downloadButton = document.querySelector("#downloadButton");
 const tabButtons = document.querySelectorAll(".tab");
 const codePanel = document.querySelector("#codePanel");
 const previewPanel = document.querySelector("#previewPanel");
+const comparePanel = document.querySelector("#comparePanel");
 const previewMeta = document.querySelector("#previewMeta");
 const previewStage = document.querySelector("#previewStage");
+const compareMeta = document.querySelector("#compareMeta");
+const compareGrid = document.querySelector("#compareGrid");
+const compareImage = document.querySelector("#compareImage");
+const comparePreview = document.querySelector("#comparePreview");
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
@@ -93,10 +99,12 @@ async function handleFile(file) {
   screenshotHeight = dimensions.height;
   generatedHtml = "";
   imagePreview.src = screenshotDataUrl;
+  compareImage.src = screenshotDataUrl;
   fileName.textContent = `${file.name} (${screenshotWidth}x${screenshotHeight}, ${Math.round(file.size / 1024)} KB)`;
   imagePreviewCard.hidden = false;
   updatePreviewViewport();
   htmlPreview.srcdoc = "";
+  comparePreview.srcdoc = "";
   codeOutput.innerHTML = "&lt;!-- Generated HTML will appear here. --&gt;";
   copyButton.disabled = true;
   downloadButton.disabled = true;
@@ -107,10 +115,14 @@ async function handleFile(file) {
 
 function showTab(tabName) {
   const showCode = tabName === "code";
+  const showPreview = tabName === "preview";
+  const showCompare = tabName === "compare";
   codePanel.hidden = !showCode;
-  previewPanel.hidden = showCode;
+  previewPanel.hidden = !showPreview;
+  comparePanel.hidden = !showCompare;
   codePanel.classList.toggle("active", showCode);
-  previewPanel.classList.toggle("active", !showCode);
+  previewPanel.classList.toggle("active", showPreview);
+  comparePanel.classList.toggle("active", showCompare);
 
   tabButtons.forEach((button) => {
     const isActive = button.dataset.tab === tabName;
@@ -122,18 +134,28 @@ function showTab(tabName) {
 function updatePreviewViewport() {
   if (!screenshotWidth || !screenshotHeight) {
     previewMeta.textContent = "Upload a screenshot to set the preview viewport.";
+    compareMeta.textContent = "Generate HTML to compare it with the uploaded design.";
     previewStage.style.removeProperty("--preview-width");
     previewStage.style.removeProperty("--preview-height");
+    compareGrid.style.removeProperty("--preview-width");
+    compareGrid.style.removeProperty("--preview-height");
     htmlPreview.removeAttribute("width");
     htmlPreview.removeAttribute("height");
+    comparePreview.removeAttribute("width");
+    comparePreview.removeAttribute("height");
     return;
   }
 
   previewMeta.textContent = `Preview viewport: ${screenshotWidth}x${screenshotHeight}px to match the uploaded screenshot. Scroll inside this panel if the artboard is larger than the available space.`;
+  compareMeta.textContent = `Side-by-side comparison at ${screenshotWidth}x${screenshotHeight}px. Scroll each pane to inspect full landing-page length.`;
   previewStage.style.setProperty("--preview-width", `${screenshotWidth}px`);
   previewStage.style.setProperty("--preview-height", `${screenshotHeight}px`);
+  compareGrid.style.setProperty("--preview-width", `${screenshotWidth}px`);
+  compareGrid.style.setProperty("--preview-height", `${screenshotHeight}px`);
   htmlPreview.setAttribute("width", String(screenshotWidth));
   htmlPreview.setAttribute("height", String(screenshotHeight));
+  comparePreview.setAttribute("width", String(screenshotWidth));
+  comparePreview.setAttribute("height", String(screenshotHeight));
 }
 
 function updateOutput(html) {
@@ -141,6 +163,7 @@ function updateOutput(html) {
   codeOutput.innerHTML = escapeHtml(html);
   updatePreviewViewport();
   htmlPreview.srcdoc = html;
+  comparePreview.srcdoc = html;
   copyButton.disabled = false;
   downloadButton.disabled = false;
   refineButton.disabled = false;
@@ -187,7 +210,7 @@ async function requestGeneration({ refine = false } = {}) {
   }
 
   setBusy(true, refine ? "refine" : "generate");
-  setStatus(refine ? "Refining HTML against the screenshot..." : "Analyzing screenshot and generating HTML...");
+  setStatus(refine ? "Refining HTML against the landing page design..." : "Analyzing landing page design and generating HTML...");
 
   try {
     const response = await fetch("/api/generate", {
@@ -200,7 +223,8 @@ async function requestGeneration({ refine = false } = {}) {
         instructions: instructions.value,
         width: screenshotWidth,
         height: screenshotHeight,
-        existingHtml: refine ? generatedHtml : ""
+        existingHtml: refine ? generatedHtml : "",
+        exactClone: exactClone.checked
       })
     });
 
@@ -210,7 +234,7 @@ async function requestGeneration({ refine = false } = {}) {
     }
 
     updateOutput(body.html);
-    setStatus(refine ? "HTML refined successfully." : "HTML generated successfully.", "success");
+    setStatus(refine ? "HTML refined successfully." : "Landing page HTML generated successfully.", "success");
   } catch (error) {
     setStatus(error.message, "error");
   } finally {

@@ -1,6 +1,6 @@
-# Design-to-HTML
+# Landing Page Design-to-HTML
 
-Upload a design screenshot and generate a complete HTML document with AI. The app serves a browser UI for drag-and-drop screenshot upload, optional generation notes, generated-code copy/download, and an iframe preview.
+Upload a landing page design screenshot and generate a complete HTML document with AI. The app serves a browser UI for drag-and-drop upload, exact-clone mode, optional fidelity notes, generated-code copy/download, same-size preview, side-by-side comparison, and iterative refinement.
 
 ## Requirements
 
@@ -22,7 +22,7 @@ By default the server uses `gpt-4.1` for better visual fidelity. You can overrid
 OPENAI_MODEL="your-model" npm start
 ```
 
-For closer matches, upload a sharp screenshot and add notes about fonts, exact colors, or elements that must be preserved. If the first result is not close enough, describe what is wrong and use **Refine current result** to revise the generated HTML against the same screenshot.
+For closer matches, upload a sharp full-page screenshot and keep **Exact landing page clone mode** enabled. That mode first asks the model for a detailed visual spec, then generates HTML from the spec and screenshot. If the first result is not close enough, describe what is wrong and use **Refine current result** to revise the generated HTML against the same screenshot.
 
 ## Test
 

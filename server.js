@@ -85,11 +85,36 @@ function validateGenerateRequest(body) {
   const width = Number.isInteger(body.width) && body.width > 0 && body.width <= 10000 ? body.width : null;
   const height = Number.isInteger(body.height) && body.height > 0 && body.height <= 10000 ? body.height : null;
   const existingHtml = typeof body.existingHtml === "string" ? body.existingHtml.trim().slice(0, 80000) : "";
+  const exactClone = body.exactClone !== false;
 
-  return { imageDataUrl, instructions, width, height, existingHtml };
+  return { imageDataUrl, instructions, width, height, existingHtml, exactClone };
 }
 
-function buildPrompt({ instructions = "", width = null, height = null, existingHtml = "" } = {}) {
+function buildVisualSpecPrompt({ instructions = "", width = null, height = null } = {}) {
+  const extraInstructions = instructions
+    ? `\nUser notes to honor while analyzing:\n${instructions}\n`
+    : "";
+  const dimensions = width && height
+    ? `The screenshot artboard is ${width}px wide by ${height}px tall.\n`
+    : "";
+
+  return `You are a design QA analyst preparing a landing-page screenshot for exact HTML recreation.
+
+Analyze the screenshot and produce a detailed visual implementation spec. Return plain text only.
+
+${dimensions}Describe:
+- Overall page structure and section order.
+- Exact visible text, labels, CTA copy, navigation items, badges, and headings.
+- Background colors, gradients, images, decorative shapes, shadows, borders, and radii.
+- Layout measurements in CSS pixels: artboard, columns, margins, gaps, card sizes, button sizes, image/icon positions, and vertical offsets.
+- Typography: likely font family style, font sizes, weights, line heights, letter spacing, and colors.
+- Responsive/artboard constraints needed to make the first render match the screenshot.
+- Any assets/icons/images that must be approximated with CSS, inline SVG, gradients, or placeholders.
+
+Be exhaustive and concrete. Prefer pixel estimates over vague language.${extraInstructions}`;
+}
+
+function buildPrompt({ instructions = "", width = null, height = null, existingHtml = "", visualSpec = "" } = {}) {
   const extraInstructions = instructions
     ? `\nAdditional user instructions:\n${instructions}\n`
     : "";
@@ -99,14 +124,18 @@ function buildPrompt({ instructions = "", width = null, height = null, existingH
   const refinement = existingHtml
     ? `\nYou are refining an existing attempt. Compare the screenshot to the current HTML and rewrite the document so it matches the screenshot more closely. Keep any parts that are already correct, but freely replace layout, spacing, typography, colors, and shapes that do not match.\n\nCurrent HTML attempt:\n${existingHtml}\n`
     : "";
+  const specContext = visualSpec
+    ? `\nDetailed visual spec extracted from the screenshot:\n${visualSpec}\n`
+    : "";
 
-  return `You are a meticulous senior frontend engineer converting a design screenshot into production-ready frontend code.
+  return `You are a meticulous senior frontend engineer cloning a landing-page design screenshot into production-ready frontend code.
 
 Create a single, complete HTML document that visually recreates the screenshot as closely as possible. Include semantic HTML and CSS in a <style> block. Do not use external assets, external fonts, frameworks, build tools, markdown fences, or explanatory text.${dimensions}
 
 Fidelity requirements:
 - Return only the complete HTML document.
-- Match the screenshot's visible artboard first; avoid inventing new content or changing the composition.
+- Match the screenshot's visible landing-page artboard first; avoid inventing new content or changing the composition.
+- Preserve all visible text exactly when readable, including line breaks and CTA labels.
 - When screenshot dimensions are provided, create a top-level artboard/page frame that is exactly that width and height in CSS pixels. The design must match at that viewport size.
 - Use absolute positioning only where it improves visual fidelity. Otherwise use CSS grid/flex with explicit pixel measurements inferred from the screenshot.
 - Recreate the layout hierarchy, alignment, whitespace, border radii, shadows, gradients, colors, and typography from the image.
@@ -115,10 +144,10 @@ Fidelity requirements:
 - If text is legible, preserve it exactly. If text is not legible, use similar-length placeholder text so the layout still matches.
 - Make the initial viewport match the screenshot composition exactly; add responsive behavior only after preserving the provided screenshot view.
 - Include accessible labels where they do not alter the visual output.
-- Use CSS reset rules so browser defaults do not distort spacing.${extraInstructions}${refinement}`;
+- Use CSS reset rules so browser defaults do not distort spacing.${extraInstructions}${specContext}${refinement}`;
 }
 
-function buildOpenAIRequest({ imageDataUrl, instructions, width, height, existingHtml, model = DEFAULT_MODEL }) {
+function buildVisualSpecRequest({ imageDataUrl, instructions, width, height, model = DEFAULT_MODEL }) {
   return {
     model,
     input: [
@@ -127,7 +156,31 @@ function buildOpenAIRequest({ imageDataUrl, instructions, width, height, existin
         content: [
           {
             type: "input_text",
-            text: buildPrompt({ instructions, width, height, existingHtml })
+            text: buildVisualSpecPrompt({ instructions, width, height })
+          },
+          {
+            type: "input_image",
+            image_url: imageDataUrl,
+            detail: "high"
+          }
+        ]
+      }
+    ],
+    temperature: 0.05,
+    max_output_tokens: 5000
+  };
+}
+
+function buildOpenAIRequest({ imageDataUrl, instructions, width, height, existingHtml, visualSpec, model = DEFAULT_MODEL }) {
+  return {
+    model,
+    input: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: buildPrompt({ instructions, width, height, existingHtml, visualSpec })
           },
           {
             type: "input_image",
@@ -146,9 +199,9 @@ function stripMarkdownFence(value) {
   return value.replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
 }
 
-function extractGeneratedHtml(responseBody) {
+function extractResponseText(responseBody) {
   if (typeof responseBody?.output_text === "string" && responseBody.output_text.trim()) {
-    return stripMarkdownFence(responseBody.output_text);
+    return responseBody.output_text.trim();
   }
 
   const output = Array.isArray(responseBody?.output) ? responseBody.output : [];
@@ -164,24 +217,24 @@ function extractGeneratedHtml(responseBody) {
 
   const html = textParts.join("\n").trim();
   if (!html) {
-    throw new Error("The AI response did not include generated HTML.");
+    throw new Error("The AI response did not include text.");
   }
 
-  return stripMarkdownFence(html);
+  return html;
 }
 
-async function generateHtml({ imageDataUrl, instructions, width, height, existingHtml, apiKey, fetchImpl = fetch, model = DEFAULT_MODEL }) {
-  if (!apiKey) {
-    throw Object.assign(new Error("Set OPENAI_API_KEY before generating HTML."), { statusCode: 500 });
-  }
+function extractGeneratedHtml(responseBody) {
+  return stripMarkdownFence(extractResponseText(responseBody));
+}
 
+async function postOpenAIRequest({ payload, apiKey, fetchImpl }) {
   const response = await fetchImpl("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(buildOpenAIRequest({ imageDataUrl, instructions, width, height, existingHtml, model }))
+    body: JSON.stringify(payload)
   });
 
   const responseBody = await response.json().catch(() => ({}));
@@ -190,7 +243,31 @@ async function generateHtml({ imageDataUrl, instructions, width, height, existin
     throw Object.assign(new Error(detail), { statusCode: response.status });
   }
 
-  return extractGeneratedHtml(responseBody);
+  return responseBody;
+}
+
+async function generateHtml({ imageDataUrl, instructions, width, height, existingHtml, exactClone = true, apiKey, fetchImpl = fetch, model = DEFAULT_MODEL }) {
+  if (!apiKey) {
+    throw Object.assign(new Error("Set OPENAI_API_KEY before generating HTML."), { statusCode: 500 });
+  }
+
+  let visualSpec = "";
+  if (exactClone && !existingHtml) {
+    const specResponseBody = await postOpenAIRequest({
+      apiKey,
+      fetchImpl,
+      payload: buildVisualSpecRequest({ imageDataUrl, instructions, width, height, model })
+    });
+    visualSpec = extractResponseText(specResponseBody);
+  }
+
+  const htmlResponseBody = await postOpenAIRequest({
+    apiKey,
+    fetchImpl,
+    payload: buildOpenAIRequest({ imageDataUrl, instructions, width, height, existingHtml, visualSpec, model })
+  });
+
+  return extractGeneratedHtml(htmlResponseBody);
 }
 
 async function handleGenerate(req, res, deps = {}) {
@@ -262,8 +339,11 @@ if (require.main === module) {
 module.exports = {
   buildOpenAIRequest,
   buildPrompt,
+  buildVisualSpecPrompt,
+  buildVisualSpecRequest,
   createServer,
   extractGeneratedHtml,
+  extractResponseText,
   generateHtml,
   validateGenerateRequest
 };

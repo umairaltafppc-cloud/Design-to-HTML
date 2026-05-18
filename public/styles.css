@@ -214,6 +214,35 @@ h1 {
   line-height: 1.45;
 }
 
+.toggle-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.toggle-field input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.toggle-field strong,
+.toggle-field small {
+  display: block;
+}
+
+.toggle-field small {
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 textarea {
   width: 100%;
   resize: vertical;
@@ -359,6 +388,48 @@ iframe {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.34);
 }
 
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.compare-pane {
+  min-width: 0;
+  margin: 0;
+}
+
+.compare-pane figcaption {
+  margin: 0 0 8px;
+  color: #dbe3ff;
+  font-weight: 800;
+}
+
+.compare-frame {
+  width: 100%;
+  min-height: 420px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: #090d18;
+  padding: 14px;
+}
+
+.compare-frame img,
+.compare-frame iframe {
+  display: block;
+  width: var(--preview-width, 100%);
+  height: var(--preview-height, auto);
+  max-width: none;
+  min-height: 0;
+  border-radius: 0;
+  background: white;
+}
+
+.compare-frame iframe {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
 .status[data-kind="success"] {
   color: var(--success);
 }
@@ -375,6 +446,10 @@ iframe {
 
   .hero-card {
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .compare-grid {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -3,23 +3,23 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Screenshot to HTML Converter</title>
+    <title>Landing Page Design to HTML</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
     <main class="shell">
       <section class="hero">
         <div>
-          <p class="eyebrow">Design-to-HTML</p>
-          <h1>Upload a design screenshot. Generate frontend code.</h1>
+          <p class="eyebrow">Landing page clone tool</p>
+          <h1>Share a landing page design. Generate matching HTML.</h1>
           <p class="hero-copy">
-            Drop in a PNG, JPG, or WebP mockup and let AI produce a complete HTML document with inline CSS that you can preview, copy, and download.
+            Drop in a PNG, JPG, or WebP landing page mockup and generate a complete HTML document with inline CSS, exact-mode prompting, same-size preview, and side-by-side comparison.
           </p>
         </div>
         <div class="hero-card" aria-label="Conversion steps">
-          <span>1. Upload screenshot</span>
-          <span>2. Add notes</span>
-          <span>3. Generate HTML</span>
+          <span>1. Upload landing page</span>
+          <span>2. Clone in exact mode</span>
+          <span>3. Compare and refine</span>
         </div>
       </section>
 
@@ -29,7 +29,7 @@
             <input id="screenshotInput" name="screenshot" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="uploadHelp">
             <div class="drop-content">
               <div class="upload-icon" aria-hidden="true">HTML</div>
-              <h2>Drop screenshot here</h2>
+              <h2>Drop landing page design here</h2>
               <p id="uploadHelp">or choose an image from your computer</p>
               <button class="secondary-button" type="button" id="browseButton">Choose image</button>
             </div>
@@ -47,6 +47,14 @@
             <span>Extra instructions for fidelity</span>
             <textarea id="instructions" rows="5" placeholder="Example: Recreate this exact landing page. Preserve the same hero text, card sizes, button colors, spacing, rounded corners, and desktop screenshot proportions."></textarea>
             <small class="field-help">For closer matches, upload a sharp screenshot and mention any important fonts, colors, or sections that must be exact.</small>
+          </label>
+
+          <label class="toggle-field">
+            <input id="exactClone" type="checkbox" checked>
+            <span>
+              <strong>Exact landing page clone mode</strong>
+              <small>Runs a visual-spec pass before writing HTML for better layout, spacing, and typography fidelity.</small>
+            </span>
           </label>
 
           <div class="button-stack">
@@ -67,6 +75,7 @@
           <div class="tabs" role="tablist" aria-label="Output view">
             <button class="tab active" type="button" data-tab="code" role="tab" aria-selected="true">Code</button>
             <button class="tab" type="button" data-tab="preview" role="tab" aria-selected="false">Preview</button>
+            <button class="tab" type="button" data-tab="compare" role="tab" aria-selected="false">Compare</button>
           </div>
 
           <div class="toolbar">
@@ -82,6 +91,24 @@
             <div class="preview-meta" id="previewMeta">Upload a screenshot to set the preview viewport.</div>
             <div class="preview-stage" id="previewStage">
               <iframe id="htmlPreview" title="Generated HTML preview" sandbox=""></iframe>
+            </div>
+          </div>
+
+          <div class="tab-panel" id="comparePanel" role="tabpanel" hidden>
+            <div class="preview-meta" id="compareMeta">Generate HTML to compare it with the uploaded design.</div>
+            <div class="compare-grid" id="compareGrid">
+              <figure class="compare-pane">
+                <figcaption>Original design</figcaption>
+                <div class="compare-frame">
+                  <img id="compareImage" alt="Uploaded landing page design">
+                </div>
+              </figure>
+              <figure class="compare-pane">
+                <figcaption>Generated HTML</figcaption>
+                <div class="compare-frame">
+                  <iframe id="comparePreview" title="Generated HTML comparison preview" sandbox=""></iframe>
+                </div>
+              </figure>
             </div>
           </div>
         </section>
