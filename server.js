@@ -114,9 +114,13 @@ function buildOpenAIRequest({ imageDataUrl, instructions, model = DEFAULT_MODEL 
   };
 }
 
+function stripMarkdownFence(value) {
+  return value.replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
+}
+
 function extractGeneratedHtml(responseBody) {
   if (typeof responseBody?.output_text === "string" && responseBody.output_text.trim()) {
-    return responseBody.output_text.trim();
+    return stripMarkdownFence(responseBody.output_text);
   }
 
   const output = Array.isArray(responseBody?.output) ? responseBody.output : [];
@@ -135,7 +139,7 @@ function extractGeneratedHtml(responseBody) {
     throw new Error("The AI response did not include generated HTML.");
   }
 
-  return html.replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  return stripMarkdownFence(html);
 }
 
 async function generateHtml({ imageDataUrl, instructions, apiKey, fetchImpl = fetch, model = DEFAULT_MODEL }) {
