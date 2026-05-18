@@ -240,7 +240,7 @@ function stripHtmlForAnalysis(html) {
 }
 
 function isLikelyBlankHtml(html) {
-  if (typeof html !== "string" || html.trim().length < 80) {
+  if (typeof html !== "string" || html.trim().length < 20) {
     return true;
   }
 
