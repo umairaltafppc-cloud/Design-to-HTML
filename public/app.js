@@ -7,6 +7,7 @@ const imagePreview = document.querySelector("#imagePreview");
 const fileName = document.querySelector("#fileName");
 const instructions = document.querySelector("#instructions");
 const generateButton = document.querySelector("#generateButton");
+const refineButton = document.querySelector("#refineButton");
 const statusMessage = document.querySelector("#statusMessage");
 const codeOutput = document.querySelector("#codeOutput");
 const htmlPreview = document.querySelector("#htmlPreview");
@@ -34,9 +35,11 @@ function setStatus(message, kind = "") {
   }
 }
 
-function setBusy(isBusy) {
+function setBusy(isBusy, action = "generate") {
   generateButton.disabled = isBusy || !screenshotDataUrl;
-  generateButton.textContent = isBusy ? "Generating..." : "Generate frontend code";
+  refineButton.disabled = isBusy || !screenshotDataUrl || !generatedHtml;
+  generateButton.textContent = isBusy && action === "generate" ? "Generating..." : "Generate frontend code";
+  refineButton.textContent = isBusy && action === "refine" ? "Refining..." : "Refine current result";
 }
 
 function escapeHtml(value) {
@@ -88,10 +91,16 @@ async function handleFile(file) {
   const dimensions = await getImageDimensions(screenshotDataUrl);
   screenshotWidth = dimensions.width;
   screenshotHeight = dimensions.height;
+  generatedHtml = "";
   imagePreview.src = screenshotDataUrl;
   fileName.textContent = `${file.name} (${screenshotWidth}x${screenshotHeight}, ${Math.round(file.size / 1024)} KB)`;
   imagePreviewCard.hidden = false;
   updatePreviewViewport();
+  htmlPreview.srcdoc = "";
+  codeOutput.innerHTML = "&lt;!-- Generated HTML will appear here. --&gt;";
+  copyButton.disabled = true;
+  downloadButton.disabled = true;
+  refineButton.disabled = true;
   generateButton.disabled = false;
   setStatus("Screenshot loaded. Add optional notes, then generate.", "success");
 }
@@ -134,6 +143,7 @@ function updateOutput(html) {
   htmlPreview.srcdoc = html;
   copyButton.disabled = false;
   downloadButton.disabled = false;
+  refineButton.disabled = false;
   showTab("preview");
 }
 
@@ -165,15 +175,19 @@ dropZone.addEventListener("drop", (event) => {
   });
 });
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
+async function requestGeneration({ refine = false } = {}) {
   if (!screenshotDataUrl) {
     setStatus("Add a screenshot before generating code.", "error");
     return;
   }
 
-  setBusy(true);
-  setStatus("Analyzing screenshot and generating HTML...");
+  if (refine && !generatedHtml) {
+    setStatus("Generate HTML before refining the result.", "error");
+    return;
+  }
+
+  setBusy(true, refine ? "refine" : "generate");
+  setStatus(refine ? "Refining HTML against the screenshot..." : "Analyzing screenshot and generating HTML...");
 
   try {
     const response = await fetch("/api/generate", {
@@ -185,7 +199,8 @@ form.addEventListener("submit", async (event) => {
         imageDataUrl: screenshotDataUrl,
         instructions: instructions.value,
         width: screenshotWidth,
-        height: screenshotHeight
+        height: screenshotHeight,
+        existingHtml: refine ? generatedHtml : ""
       })
     });
 
@@ -195,12 +210,21 @@ form.addEventListener("submit", async (event) => {
     }
 
     updateOutput(body.html);
-    setStatus("HTML generated successfully.", "success");
+    setStatus(refine ? "HTML refined successfully." : "HTML generated successfully.", "success");
   } catch (error) {
     setStatus(error.message, "error");
   } finally {
     setBusy(false);
   }
+}
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await requestGeneration();
+});
+
+refineButton.addEventListener("click", () => {
+  requestGeneration({ refine: true });
 });
 
 copyButton.addEventListener("click", async () => {

@@ -37,12 +37,15 @@ test("buildPrompt includes optional user instructions", () => {
   const prompt = buildPrompt({
     instructions: "Make the nav sticky.",
     width: 390,
-    height: 844
+    height: 844,
+    existingHtml: "<!doctype html><html><body>Old attempt</body></html>"
   });
 
   assert.match(prompt, /Return only the complete HTML document/);
   assert.match(prompt, /390px wide by 844px tall/);
   assert.match(prompt, /Make the nav sticky/);
+  assert.match(prompt, /refining an existing attempt/);
+  assert.match(prompt, /Old attempt/);
 });
 
 test("buildOpenAIRequest sends screenshot and prompt to responses API shape", () => {
@@ -51,12 +54,14 @@ test("buildOpenAIRequest sends screenshot and prompt to responses API shape", ()
     instructions: "Prioritize semantic sections.",
     width: 1200,
     height: 900,
+    existingHtml: "<!doctype html><html></html>",
     model: "test-model"
   });
 
   assert.equal(payload.model, "test-model");
   assert.equal(payload.input[0].content[0].type, "input_text");
   assert.match(payload.input[0].content[0].text, /1200px wide by 900px tall/);
+  assert.match(payload.input[0].content[0].text, /Current HTML attempt/);
   assert.equal(payload.input[0].content[1].type, "input_image");
   assert.equal(payload.input[0].content[1].image_url, SAMPLE_IMAGE);
   assert.equal(payload.max_output_tokens, 12000);

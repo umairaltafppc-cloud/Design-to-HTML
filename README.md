@@ -22,7 +22,7 @@ By default the server uses `gpt-4.1` for better visual fidelity. You can overrid
 OPENAI_MODEL="your-model" npm start
 ```
 
-For closer matches, upload a sharp screenshot and add notes about fonts, exact colors, or elements that must be preserved.
+For closer matches, upload a sharp screenshot and add notes about fonts, exact colors, or elements that must be preserved. If the first result is not close enough, describe what is wrong and use **Refine current result** to revise the generated HTML against the same screenshot.
 
 ## Test
 

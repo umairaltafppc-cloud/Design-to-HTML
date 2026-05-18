@@ -238,6 +238,11 @@ textarea:focus {
   font-weight: 800;
 }
 
+.button-stack {
+  display: grid;
+  gap: 10px;
+}
+
 .primary-button {
   padding: 15px 18px;
   color: white;

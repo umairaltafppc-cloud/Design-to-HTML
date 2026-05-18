@@ -84,16 +84,20 @@ function validateGenerateRequest(body) {
   const instructions = typeof body.instructions === "string" ? body.instructions.trim().slice(0, 1200) : "";
   const width = Number.isInteger(body.width) && body.width > 0 && body.width <= 10000 ? body.width : null;
   const height = Number.isInteger(body.height) && body.height > 0 && body.height <= 10000 ? body.height : null;
+  const existingHtml = typeof body.existingHtml === "string" ? body.existingHtml.trim().slice(0, 80000) : "";
 
-  return { imageDataUrl, instructions, width, height };
+  return { imageDataUrl, instructions, width, height, existingHtml };
 }
 
-function buildPrompt({ instructions = "", width = null, height = null } = {}) {
+function buildPrompt({ instructions = "", width = null, height = null, existingHtml = "" } = {}) {
   const extraInstructions = instructions
     ? `\nAdditional user instructions:\n${instructions}\n`
     : "";
   const dimensions = width && height
     ? `\nScreenshot dimensions: ${width}px wide by ${height}px tall. Build the primary artboard at exactly ${width}px by ${height}px before adding any responsive behavior.\n`
+    : "";
+  const refinement = existingHtml
+    ? `\nYou are refining an existing attempt. Compare the screenshot to the current HTML and rewrite the document so it matches the screenshot more closely. Keep any parts that are already correct, but freely replace layout, spacing, typography, colors, and shapes that do not match.\n\nCurrent HTML attempt:\n${existingHtml}\n`
     : "";
 
   return `You are a meticulous senior frontend engineer converting a design screenshot into production-ready frontend code.
@@ -111,10 +115,10 @@ Fidelity requirements:
 - If text is legible, preserve it exactly. If text is not legible, use similar-length placeholder text so the layout still matches.
 - Make the initial viewport match the screenshot composition exactly; add responsive behavior only after preserving the provided screenshot view.
 - Include accessible labels where they do not alter the visual output.
-- Use CSS reset rules so browser defaults do not distort spacing.${extraInstructions}`;
+- Use CSS reset rules so browser defaults do not distort spacing.${extraInstructions}${refinement}`;
 }
 
-function buildOpenAIRequest({ imageDataUrl, instructions, width, height, model = DEFAULT_MODEL }) {
+function buildOpenAIRequest({ imageDataUrl, instructions, width, height, existingHtml, model = DEFAULT_MODEL }) {
   return {
     model,
     input: [
@@ -123,7 +127,7 @@ function buildOpenAIRequest({ imageDataUrl, instructions, width, height, model =
         content: [
           {
             type: "input_text",
-            text: buildPrompt({ instructions, width, height })
+            text: buildPrompt({ instructions, width, height, existingHtml })
           },
           {
             type: "input_image",
@@ -166,7 +170,7 @@ function extractGeneratedHtml(responseBody) {
   return stripMarkdownFence(html);
 }
 
-async function generateHtml({ imageDataUrl, instructions, width, height, apiKey, fetchImpl = fetch, model = DEFAULT_MODEL }) {
+async function generateHtml({ imageDataUrl, instructions, width, height, existingHtml, apiKey, fetchImpl = fetch, model = DEFAULT_MODEL }) {
   if (!apiKey) {
     throw Object.assign(new Error("Set OPENAI_API_KEY before generating HTML."), { statusCode: 500 });
   }
@@ -177,7 +181,7 @@ async function generateHtml({ imageDataUrl, instructions, width, height, apiKey,
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(buildOpenAIRequest({ imageDataUrl, instructions, width, height, model }))
+    body: JSON.stringify(buildOpenAIRequest({ imageDataUrl, instructions, width, height, existingHtml, model }))
   });
 
   const responseBody = await response.json().catch(() => ({}));

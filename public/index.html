@@ -49,9 +49,14 @@
             <small class="field-help">For closer matches, upload a sharp screenshot and mention any important fonts, colors, or sections that must be exact.</small>
           </label>
 
-          <button class="primary-button" id="generateButton" type="submit" disabled>
-            Generate frontend code
-          </button>
+          <div class="button-stack">
+            <button class="primary-button" id="generateButton" type="submit" disabled>
+              Generate frontend code
+            </button>
+            <button class="secondary-button" id="refineButton" type="button" disabled>
+              Refine current result
+            </button>
+          </div>
 
           <p class="status" id="statusMessage" role="status" aria-live="polite">
             Add a screenshot to begin.
