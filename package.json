@@ -1,0 +1,20 @@
+{
+  "name": "design-to-html",
+  "version": "1.0.0",
+  "description": "Upload a design screenshot and generate frontend HTML with AI.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "design",
+    "html",
+    "ai",
+    "screenshot"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
