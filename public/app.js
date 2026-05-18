@@ -20,6 +20,8 @@ const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
 let screenshotDataUrl = "";
 let generatedHtml = "";
+let screenshotWidth = null;
+let screenshotHeight = null;
 
 function setStatus(message, kind = "") {
   statusMessage.textContent = message;
@@ -53,6 +55,20 @@ function readFileAsDataUrl(file) {
   });
 }
 
+function getImageDimensions(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener("load", () => {
+      resolve({
+        width: image.naturalWidth,
+        height: image.naturalHeight
+      });
+    });
+    image.addEventListener("error", () => reject(new Error("Could not read the screenshot dimensions.")));
+    image.src = dataUrl;
+  });
+}
+
 async function handleFile(file) {
   if (!file) return;
 
@@ -67,8 +83,11 @@ async function handleFile(file) {
   }
 
   screenshotDataUrl = await readFileAsDataUrl(file);
+  const dimensions = await getImageDimensions(screenshotDataUrl);
+  screenshotWidth = dimensions.width;
+  screenshotHeight = dimensions.height;
   imagePreview.src = screenshotDataUrl;
-  fileName.textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+  fileName.textContent = `${file.name} (${screenshotWidth}x${screenshotHeight}, ${Math.round(file.size / 1024)} KB)`;
   imagePreviewCard.hidden = false;
   generateButton.disabled = false;
   setStatus("Screenshot loaded. Add optional notes, then generate.", "success");
@@ -143,7 +162,9 @@ form.addEventListener("submit", async (event) => {
       },
       body: JSON.stringify({
         imageDataUrl: screenshotDataUrl,
-        instructions: instructions.value
+        instructions: instructions.value,
+        width: screenshotWidth,
+        height: screenshotHeight
       })
     });
 

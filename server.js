@@ -5,7 +5,8 @@ const fs = require("node:fs/promises");
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, "public");
 const MAX_BODY_BYTES = 30 * 1024 * 1024;
-const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4.1";
+const MAX_OUTPUT_TOKENS = Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 12000);
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -81,28 +82,37 @@ function validateGenerateRequest(body) {
   }
 
   const instructions = typeof body.instructions === "string" ? body.instructions.trim().slice(0, 1200) : "";
+  const width = Number.isInteger(body.width) && body.width > 0 && body.width <= 10000 ? body.width : null;
+  const height = Number.isInteger(body.height) && body.height > 0 && body.height <= 10000 ? body.height : null;
 
-  return { imageDataUrl, instructions };
+  return { imageDataUrl, instructions, width, height };
 }
 
-function buildPrompt(instructions = "") {
+function buildPrompt({ instructions = "", width = null, height = null } = {}) {
   const extraInstructions = instructions
     ? `\nAdditional user instructions:\n${instructions}\n`
     : "";
+  const dimensions = width && height
+    ? `\nScreenshot dimensions: ${width}px wide by ${height}px tall. Treat these as the target artboard dimensions for the initial viewport.\n`
+    : "";
 
-  return `You are an expert frontend engineer converting a design screenshot into production-ready frontend code.
+  return `You are a meticulous senior frontend engineer converting a design screenshot into production-ready frontend code.
 
-Create a single, complete HTML document that faithfully recreates the screenshot. Include semantic HTML and CSS in a <style> block. Do not use external assets, external fonts, frameworks, build tools, markdown fences, or explanatory text.
+Create a single, complete HTML document that visually recreates the screenshot as closely as possible. Include semantic HTML and CSS in a <style> block. Do not use external assets, external fonts, frameworks, build tools, markdown fences, or explanatory text.${dimensions}
 
-Requirements:
+Fidelity requirements:
 - Return only the complete HTML document.
-- Use CSS layout, gradients, shadows, spacing, and typography to match the screenshot as closely as possible.
-- Use placeholder images or CSS shapes when exact image assets are not available.
-- Keep the result responsive and centered in the viewport when appropriate.
-- Include accessible text and labels when visual elements imply them.${extraInstructions}`;
+- Match the screenshot's visible artboard first; avoid inventing new content or changing the composition.
+- Recreate the layout hierarchy, alignment, whitespace, border radii, shadows, gradients, colors, and typography from the image.
+- Estimate sizes, offsets, line heights, font weights, and spacing in pixels from the screenshot.
+- Use CSS shapes, gradients, emoji-free placeholders, and inline SVG/data-URI patterns when image assets or icons are visible but unavailable.
+- If text is legible, preserve it exactly. If text is not legible, use similar-length placeholder text so the layout still matches.
+- Make the initial viewport match the screenshot composition; add responsive behavior only after preserving the desktop/mobile screenshot view.
+- Include accessible labels where they do not alter the visual output.
+- Use CSS reset rules so browser defaults do not distort spacing.${extraInstructions}`;
 }
 
-function buildOpenAIRequest({ imageDataUrl, instructions, model = DEFAULT_MODEL }) {
+function buildOpenAIRequest({ imageDataUrl, instructions, width, height, model = DEFAULT_MODEL }) {
   return {
     model,
     input: [
@@ -111,7 +121,7 @@ function buildOpenAIRequest({ imageDataUrl, instructions, model = DEFAULT_MODEL 
         content: [
           {
             type: "input_text",
-            text: buildPrompt(instructions)
+            text: buildPrompt({ instructions, width, height })
           },
           {
             type: "input_image",
@@ -121,7 +131,8 @@ function buildOpenAIRequest({ imageDataUrl, instructions, model = DEFAULT_MODEL 
         ]
       }
     ],
-    temperature: 0.2
+    temperature: 0.1,
+    max_output_tokens: MAX_OUTPUT_TOKENS
   };
 }
 
@@ -153,7 +164,7 @@ function extractGeneratedHtml(responseBody) {
   return stripMarkdownFence(html);
 }
 
-async function generateHtml({ imageDataUrl, instructions, apiKey, fetchImpl = fetch, model = DEFAULT_MODEL }) {
+async function generateHtml({ imageDataUrl, instructions, width, height, apiKey, fetchImpl = fetch, model = DEFAULT_MODEL }) {
   if (!apiKey) {
     throw Object.assign(new Error("Set OPENAI_API_KEY before generating HTML."), { statusCode: 500 });
   }
@@ -164,7 +175,7 @@ async function generateHtml({ imageDataUrl, instructions, apiKey, fetchImpl = fe
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(buildOpenAIRequest({ imageDataUrl, instructions, model }))
+    body: JSON.stringify(buildOpenAIRequest({ imageDataUrl, instructions, width, height, model }))
   });
 
   const responseBody = await response.json().catch(() => ({}));

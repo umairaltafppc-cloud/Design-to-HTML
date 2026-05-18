@@ -15,11 +15,15 @@ const SAMPLE_IMAGE = "data:image/png;base64,iVBORw0KGgo=";
 test("validateGenerateRequest accepts supported image data urls", () => {
   const result = validateGenerateRequest({
     imageDataUrl: SAMPLE_IMAGE,
-    instructions: "Use a dark theme."
+    instructions: "Use a dark theme.",
+    width: 1440,
+    height: 1024
   });
 
   assert.equal(result.imageDataUrl, SAMPLE_IMAGE);
   assert.equal(result.instructions, "Use a dark theme.");
+  assert.equal(result.width, 1440);
+  assert.equal(result.height, 1024);
 });
 
 test("validateGenerateRequest rejects unsupported image payloads", () => {
@@ -30,9 +34,14 @@ test("validateGenerateRequest rejects unsupported image payloads", () => {
 });
 
 test("buildPrompt includes optional user instructions", () => {
-  const prompt = buildPrompt("Make the nav sticky.");
+  const prompt = buildPrompt({
+    instructions: "Make the nav sticky.",
+    width: 390,
+    height: 844
+  });
 
   assert.match(prompt, /Return only the complete HTML document/);
+  assert.match(prompt, /390px wide by 844px tall/);
   assert.match(prompt, /Make the nav sticky/);
 });
 
@@ -40,13 +49,17 @@ test("buildOpenAIRequest sends screenshot and prompt to responses API shape", ()
   const payload = buildOpenAIRequest({
     imageDataUrl: SAMPLE_IMAGE,
     instructions: "Prioritize semantic sections.",
+    width: 1200,
+    height: 900,
     model: "test-model"
   });
 
   assert.equal(payload.model, "test-model");
   assert.equal(payload.input[0].content[0].type, "input_text");
+  assert.match(payload.input[0].content[0].text, /1200px wide by 900px tall/);
   assert.equal(payload.input[0].content[1].type, "input_image");
   assert.equal(payload.input[0].content[1].image_url, SAMPLE_IMAGE);
+  assert.equal(payload.max_output_tokens, 12000);
 });
 
 test("extractGeneratedHtml supports output_text", () => {
@@ -83,6 +96,7 @@ test("createServer handles generation through an injected fetch client", async (
 
       const payload = JSON.parse(options.body);
       assert.equal(payload.input[0].content[1].image_url, SAMPLE_IMAGE);
+      assert.match(payload.input[0].content[0].text, /1024px wide by 768px tall/);
 
       return {
         ok: true,
@@ -105,7 +119,9 @@ test("createServer handles generation through an injected fetch client", async (
     },
     body: JSON.stringify({
       imageDataUrl: SAMPLE_IMAGE,
-      instructions: "Use semantic HTML."
+      instructions: "Use semantic HTML.",
+      width: 1024,
+      height: 768
     })
   });
 

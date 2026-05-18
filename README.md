@@ -16,11 +16,13 @@ npm start
 
 Then open [http://localhost:3000](http://localhost:3000).
 
-By default the server uses `gpt-4.1-mini`. You can override it with:
+By default the server uses `gpt-4.1` for better visual fidelity. You can override it with:
 
 ```bash
 OPENAI_MODEL="your-model" npm start
 ```
+
+For closer matches, upload a sharp screenshot and add notes about fonts, exact colors, or elements that must be preserved.
 
 ## Test
 
