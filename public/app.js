@@ -7,6 +7,7 @@ const imagePreview = document.querySelector("#imagePreview");
 const fileName = document.querySelector("#fileName");
 const instructions = document.querySelector("#instructions");
 const exactClone = document.querySelector("#exactClone");
+const deepAnalysis = document.querySelector("#deepAnalysis");
 const generateButton = document.querySelector("#generateButton");
 const refineButton = document.querySelector("#refineButton");
 const statusMessage = document.querySelector("#statusMessage");
@@ -224,11 +225,12 @@ async function requestGeneration({ refine = false } = {}) {
         width: screenshotWidth,
         height: screenshotHeight,
         existingHtml: refine ? generatedHtml : "",
-        exactClone: exactClone.checked
+        exactClone: exactClone.checked,
+        deepAnalysis: deepAnalysis.checked && !refine
       })
     });
 
-    const body = await response.json();
+    const body = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(body.error || "Generation failed.");
     }
@@ -236,7 +238,11 @@ async function requestGeneration({ refine = false } = {}) {
     updateOutput(body.html);
     setStatus(refine ? "HTML refined successfully." : "Landing page HTML generated successfully.", "success");
   } catch (error) {
-    setStatus(error.message, "error");
+    if (error instanceof TypeError) {
+      setStatus("The browser lost the generation connection. Try turning off Deep analysis mode or upload a smaller screenshot.", "error");
+    } else {
+      setStatus(error.message, "error");
+    }
   } finally {
     setBusy(false);
   }

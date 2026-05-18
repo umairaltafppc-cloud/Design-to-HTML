@@ -53,7 +53,15 @@
             <input id="exactClone" type="checkbox" checked>
             <span>
               <strong>Exact landing page clone mode</strong>
-              <small>Runs a visual-spec pass before writing HTML for better layout, spacing, and typography fidelity.</small>
+              <small>Uses a strict landing-page clone prompt while keeping generation in one request to avoid preview fetch timeouts.</small>
+            </span>
+          </label>
+
+          <label class="toggle-field">
+            <input id="deepAnalysis" type="checkbox">
+            <span>
+              <strong>Deep analysis mode</strong>
+              <small>Optional slower two-pass analysis for small screenshots. Turn this off if the browser shows failed to fetch.</small>
             </span>
           </label>
 

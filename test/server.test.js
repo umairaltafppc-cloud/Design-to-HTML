@@ -28,6 +28,7 @@ test("validateGenerateRequest accepts supported image data urls", () => {
   assert.equal(result.width, 1440);
   assert.equal(result.height, 1024);
   assert.equal(result.exactClone, true);
+  assert.equal(result.deepAnalysis, false);
 });
 
 test("validateGenerateRequest rejects unsupported image payloads", () => {
@@ -204,6 +205,7 @@ test("generateHtml runs a visual spec pass in exact clone mode", async () => {
     instructions: "Clone the landing page exactly.",
     width: 1440,
     height: 1000,
+    deepAnalysis: true,
     apiKey: "test-key",
     model: "test-model",
     fetchImpl: async (url, options) => {
@@ -223,4 +225,29 @@ test("generateHtml runs a visual spec pass in exact clone mode", async () => {
   assert.equal(calls.length, 2);
   assert.match(calls[0].input[0].content[0].text, /visual implementation spec/);
   assert.match(calls[1].input[0].content[0].text, /Visual spec: navy hero/);
+});
+
+test("generateHtml keeps exact clone mode to one request by default", async () => {
+  const calls = [];
+  const html = await generateHtml({
+    imageDataUrl: SAMPLE_IMAGE,
+    instructions: "Clone the landing page exactly.",
+    width: 1440,
+    height: 1000,
+    apiKey: "test-key",
+    model: "test-model",
+    fetchImpl: async (url, options) => {
+      calls.push(JSON.parse(options.body));
+      return {
+        ok: true,
+        json: async () => ({
+          output_text: "<!doctype html><html><body>One request clone</body></html>"
+        })
+      };
+    }
+  });
+
+  assert.equal(html, "<!doctype html><html><body>One request clone</body></html>");
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].input[0].content[0].text, /silently analyze the screenshot/);
 });

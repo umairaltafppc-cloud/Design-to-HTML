@@ -86,8 +86,9 @@ function validateGenerateRequest(body) {
   const height = Number.isInteger(body.height) && body.height > 0 && body.height <= 10000 ? body.height : null;
   const existingHtml = typeof body.existingHtml === "string" ? body.existingHtml.trim().slice(0, 80000) : "";
   const exactClone = body.exactClone !== false;
+  const deepAnalysis = body.deepAnalysis === true;
 
-  return { imageDataUrl, instructions, width, height, existingHtml, exactClone };
+  return { imageDataUrl, instructions, width, height, existingHtml, exactClone, deepAnalysis };
 }
 
 function buildVisualSpecPrompt({ instructions = "", width = null, height = null } = {}) {
@@ -134,6 +135,7 @@ Create a single, complete HTML document that visually recreates the screenshot a
 
 Fidelity requirements:
 - Return only the complete HTML document.
+- Before writing code, silently analyze the screenshot as a visual spec: section order, exact text, colors, spacing, typography, assets, and component dimensions.
 - Match the screenshot's visible landing-page artboard first; avoid inventing new content or changing the composition.
 - Preserve all visible text exactly when readable, including line breaks and CTA labels.
 - When screenshot dimensions are provided, create a top-level artboard/page frame that is exactly that width and height in CSS pixels. The design must match at that viewport size.
@@ -246,13 +248,13 @@ async function postOpenAIRequest({ payload, apiKey, fetchImpl }) {
   return responseBody;
 }
 
-async function generateHtml({ imageDataUrl, instructions, width, height, existingHtml, exactClone = true, apiKey, fetchImpl = fetch, model = DEFAULT_MODEL }) {
+async function generateHtml({ imageDataUrl, instructions, width, height, existingHtml, exactClone = true, deepAnalysis = false, apiKey, fetchImpl = fetch, model = DEFAULT_MODEL }) {
   if (!apiKey) {
     throw Object.assign(new Error("Set OPENAI_API_KEY before generating HTML."), { statusCode: 500 });
   }
 
   let visualSpec = "";
-  if (exactClone && !existingHtml) {
+  if (exactClone && deepAnalysis && !existingHtml) {
     const specResponseBody = await postOpenAIRequest({
       apiKey,
       fetchImpl,
