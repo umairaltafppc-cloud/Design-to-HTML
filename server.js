@@ -1,12 +1,15 @@
 const http = require("node:http");
 const path = require("node:path");
 const fs = require("node:fs/promises");
+const crypto = require("node:crypto");
 
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, "public");
 const MAX_BODY_BYTES = 30 * 1024 * 1024;
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4.1";
 const MAX_OUTPUT_TOKENS = Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 12000);
+const JOB_TTL_MS = 30 * 60 * 1000;
+const generationJobs = new Map();
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -371,6 +374,92 @@ async function handleGenerate(req, res, deps = {}) {
   }
 }
 
+function cleanupGenerationJobs(now = Date.now()) {
+  for (const [jobId, job] of generationJobs) {
+    if (now - job.createdAt > JOB_TTL_MS) {
+      generationJobs.delete(jobId);
+    }
+  }
+}
+
+function createGenerationJob(request, deps = {}) {
+  cleanupGenerationJobs();
+
+  const jobId = crypto.randomUUID();
+  const job = {
+    id: jobId,
+    status: "pending",
+    html: "",
+    error: "",
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+  generationJobs.set(jobId, job);
+
+  generateHtml({
+    ...request,
+    apiKey: deps.apiKey ?? process.env.OPENAI_API_KEY,
+    fetchImpl: deps.fetchImpl,
+    model: deps.model
+  })
+    .then((html) => {
+      job.status = "completed";
+      job.html = html;
+      job.updatedAt = Date.now();
+    })
+    .catch((error) => {
+      job.status = "failed";
+      job.error = error.message || "Generation failed.";
+      job.updatedAt = Date.now();
+    });
+
+  return job;
+}
+
+async function handleCreateGenerateJob(req, res, deps = {}) {
+  try {
+    const apiKey = deps.apiKey ?? process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      sendJson(res, 500, { error: "Set OPENAI_API_KEY before generating HTML." });
+      return;
+    }
+
+    const body = await parseJsonBody(req, deps.maxBodyBytes);
+    const request = validateGenerateRequest(body);
+    const job = createGenerationJob(request, { ...deps, apiKey });
+    sendJson(res, 202, { jobId: job.id, status: job.status });
+  } catch (error) {
+    sendJson(res, error.statusCode || 500, { error: error.message || "Something went wrong." });
+  }
+}
+
+function handleGetGenerateJob(req, res) {
+  cleanupGenerationJobs();
+
+  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  const jobId = decodeURIComponent(url.pathname.replace(/^\/api\/generate-jobs\//, ""));
+  const job = generationJobs.get(jobId);
+  if (!job) {
+    sendJson(res, 404, { error: "Generation job not found." });
+    return;
+  }
+
+  const payload = {
+    jobId: job.id,
+    status: job.status,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt
+  };
+  if (job.status === "completed") {
+    payload.html = job.html;
+  }
+  if (job.status === "failed") {
+    payload.error = job.error;
+  }
+
+  sendJson(res, 200, payload);
+}
+
 async function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   const requestedPath = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
@@ -405,6 +494,16 @@ function createServer(deps = {}) {
       return;
     }
 
+    if (req.method === "POST" && req.url === "/api/generate-jobs") {
+      handleCreateGenerateJob(req, res, deps);
+      return;
+    }
+
+    if (req.method === "GET" && req.url.startsWith("/api/generate-jobs/")) {
+      handleGetGenerateJob(req, res);
+      return;
+    }
+
     if (req.method === "GET" || req.method === "HEAD") {
       serveStatic(req, res);
       return;
@@ -425,6 +524,8 @@ module.exports = {
   buildPrompt,
   buildVisualSpecPrompt,
   buildVisualSpecRequest,
+  cleanupGenerationJobs,
+  createGenerationJob,
   createServer,
   extractGeneratedHtml,
   extractResponseText,

@@ -194,6 +194,56 @@ test("createServer handles generation through an injected fetch client", async (
   assert.match(body.html, /Generated route HTML/);
 });
 
+test("createServer starts and polls asynchronous generation jobs", async (t) => {
+  const server = createServer({
+    apiKey: "test-key",
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        output_text: "<!doctype html><html><body>Generated job HTML</body></html>"
+      })
+    })
+  });
+
+  t.after(() => server.close());
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+
+  const { port } = server.address();
+  const createResponse = await fetch(`http://127.0.0.1:${port}/api/generate-jobs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      imageDataUrl: SAMPLE_IMAGE,
+      instructions: "Use semantic HTML.",
+      width: 1024,
+      height: 768,
+      exactClone: false
+    })
+  });
+
+  assert.equal(createResponse.status, 202);
+  const created = await createResponse.json();
+  assert.equal(created.status, "pending");
+  assert.ok(created.jobId);
+
+  let polled;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const pollResponse = await fetch(`http://127.0.0.1:${port}/api/generate-jobs/${created.jobId}`);
+    assert.equal(pollResponse.status, 200);
+    polled = await pollResponse.json();
+    if (polled.status === "completed") {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
+  assert.equal(polled.status, "completed");
+  assert.match(polled.html, /Generated job HTML/);
+});
+
 test("createServer returns JSON when the request body is too large", async (t) => {
   const server = createServer({
     apiKey: "test-key",

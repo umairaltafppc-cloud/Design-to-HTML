@@ -27,10 +27,12 @@ const compareImage = document.querySelector("#compareImage");
 const comparePreview = document.querySelector("#comparePreview");
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
-const MAX_GENERATION_IMAGE_BYTES = 4.5 * 1024 * 1024;
-const MAX_GENERATION_WIDTH = 1440;
-const MAX_GENERATION_HEIGHT = 6000;
-const JPEG_QUALITIES = [0.9, 0.82, 0.74, 0.66, 0.58];
+const MAX_GENERATION_IMAGE_BYTES = 1.8 * 1024 * 1024;
+const MAX_GENERATION_WIDTH = 1200;
+const MAX_GENERATION_HEIGHT = 4500;
+const JPEG_QUALITIES = [0.84, 0.74, 0.64, 0.54, 0.44];
+const JOB_POLL_INTERVAL_MS = 2000;
+const JOB_TIMEOUT_MS = 7 * 60 * 1000;
 
 let screenshotDataUrl = "";
 let generatedHtml = "";
@@ -272,6 +274,62 @@ function updateOutput(html) {
   showTab("preview");
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function startGenerationJob(payload) {
+  const response = await fetch("/api/generate-jobs", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.error || "Could not start generation.");
+  }
+
+  return body.jobId;
+}
+
+async function pollGenerationJob(jobId, { refine = false } = {}) {
+  const startedAt = Date.now();
+  let transientFailures = 0;
+
+  while (Date.now() - startedAt < JOB_TIMEOUT_MS) {
+    await wait(JOB_POLL_INTERVAL_MS);
+    setStatus(refine ? "Still refining HTML..." : "Still generating HTML...");
+
+    try {
+      const response = await fetch(`/api/generate-jobs/${encodeURIComponent(jobId)}`);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body.error || "Could not check generation status.");
+      }
+
+      if (body.status === "completed") {
+        return body.html;
+      }
+
+      if (body.status === "failed") {
+        throw new Error(body.error || "Generation failed.");
+      }
+
+      transientFailures = 0;
+    } catch (error) {
+      if (!(error instanceof TypeError) || transientFailures >= 3) {
+        throw error;
+      }
+      transientFailures += 1;
+    }
+  }
+
+  throw new Error("Generation is taking too long. Try a shorter screenshot crop or fewer fidelity notes.");
+}
+
 browseButton.addEventListener("click", () => fileInput.click());
 
 fileInput.addEventListener("change", (event) => {
@@ -312,39 +370,31 @@ async function requestGeneration({ refine = false } = {}) {
   }
 
   setBusy(true, refine ? "refine" : "generate");
-  setStatus(refine ? "Refining HTML against the landing page design..." : "Analyzing landing page design and generating HTML...");
+  setStatus(refine ? "Starting refinement job..." : "Starting generation job...");
 
   try {
-    const response = await fetch("/api/generate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        imageDataUrl: screenshotDataUrl,
-        instructions: instructions.value,
-        width: screenshotWidth,
-        height: screenshotHeight,
-        existingHtml: refine ? generatedHtml : "",
-        exactClone: exactClone.checked,
-        deepAnalysis: deepAnalysis.checked && !refine
-      })
+    const jobId = await startGenerationJob({
+      imageDataUrl: screenshotDataUrl,
+      instructions: instructions.value,
+      width: screenshotWidth,
+      height: screenshotHeight,
+      existingHtml: refine ? generatedHtml : "",
+      exactClone: exactClone.checked,
+      deepAnalysis: deepAnalysis.checked && !refine
     });
 
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(body.error || "Generation failed.");
-    }
+    setStatus(refine ? "Refinement job started. Waiting for result..." : "Generation job started. Waiting for result...");
+    const html = await pollGenerationJob(jobId, { refine });
 
-    if (!body.html || body.html.trim().length < 80) {
+    if (!html || html.trim().length < 80) {
       throw new Error("The generated HTML looked blank. Add notes describing the visible layout and try again.");
     }
 
-    updateOutput(body.html);
+    updateOutput(html);
     setStatus(refine ? "HTML refined successfully." : "Landing page HTML generated successfully.", "success");
   } catch (error) {
     if (error instanceof TypeError) {
-      setStatus("The browser lost the generation connection. The screenshot was optimized first; if this repeats, turn off Deep analysis mode and try a shorter screenshot crop.", "error");
+      setStatus("The browser lost a short status connection. Refresh and try again; if it repeats, use a shorter screenshot crop.", "error");
     } else {
       const blankOutput = /blank-looking|blank|white page/i.test(error.message);
       setStatus(
