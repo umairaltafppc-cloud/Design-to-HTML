@@ -301,5 +301,5 @@ test("generateHtml retries when the first response looks blank", async () => {
 
   assert.match(html, /Visible landing page/);
   assert.equal(calls.length, 2);
-  assert.match(calls[1].input[0].content[0].text, /previous HTML rendered as a blank white page/);
+  assert.match(calls[1].input[0].content[0].text, /previous HTML rendered as a blank white or invisible page/);
 });
