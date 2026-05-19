@@ -22,7 +22,7 @@ By default the server uses `gpt-4.1` for better visual fidelity. You can overrid
 OPENAI_MODEL="your-model" npm start
 ```
 
-For closer matches, upload a sharp full-page screenshot and keep **Exact landing page clone mode** enabled. If the first result is not close enough, describe what is wrong and use **Refine current result** to revise the generated HTML against the same screenshot. **Deep analysis mode** is available for smaller screenshots, but it is slower and may hit browser/proxy timeouts on large uploads.
+For closer matches, upload a sharp full-page screenshot and keep **Exact landing page clone mode** enabled. Large screenshots are automatically resized/compressed in the browser before generation to avoid preview-proxy connection drops. If the first result is not close enough, describe what is wrong and use **Refine current result** to revise the generated HTML against the same screenshot. **Deep analysis mode** is available for smaller screenshots, but it is slower and may hit browser/proxy timeouts on large uploads.
 
 ## Test
 

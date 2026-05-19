@@ -27,11 +27,18 @@ const compareImage = document.querySelector("#compareImage");
 const comparePreview = document.querySelector("#comparePreview");
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const MAX_GENERATION_IMAGE_BYTES = 4.5 * 1024 * 1024;
+const MAX_GENERATION_WIDTH = 1440;
+const MAX_GENERATION_HEIGHT = 6000;
+const JPEG_QUALITIES = [0.9, 0.82, 0.74, 0.66, 0.58];
 
 let screenshotDataUrl = "";
 let generatedHtml = "";
 let screenshotWidth = null;
 let screenshotHeight = null;
+let originalScreenshotWidth = null;
+let originalScreenshotHeight = null;
+let optimizedImageBytes = 0;
 
 function setStatus(message, kind = "") {
   statusMessage.textContent = message;
@@ -81,6 +88,93 @@ function getImageDimensions(dataUrl) {
   });
 }
 
+function dataUrlByteSize(dataUrl) {
+  const base64 = dataUrl.split(",")[1] || "";
+  return Math.ceil((base64.length * 3) / 4);
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+      } else {
+        reject(new Error("Could not optimize the screenshot for upload."));
+      }
+    }, type, quality);
+  });
+}
+
+async function blobToDataUrl(blob) {
+  return readFileAsDataUrl(blob);
+}
+
+function getOptimizedSize(width, height) {
+  const scale = Math.min(1, MAX_GENERATION_WIDTH / width, MAX_GENERATION_HEIGHT / height);
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale))
+  };
+}
+
+async function optimizeScreenshotForGeneration(file) {
+  const originalDataUrl = await readFileAsDataUrl(file);
+  const originalDimensions = await getImageDimensions(originalDataUrl);
+  const { width, height } = getOptimizedSize(originalDimensions.width, originalDimensions.height);
+
+  if (
+    originalDataUrl.length <= MAX_GENERATION_IMAGE_BYTES * 1.37
+    && width === originalDimensions.width
+    && height === originalDimensions.height
+    && file.type !== "image/png"
+  ) {
+    return {
+      dataUrl: originalDataUrl,
+      width,
+      height,
+      bytes: dataUrlByteSize(originalDataUrl),
+      originalWidth: originalDimensions.width,
+      originalHeight: originalDimensions.height,
+      optimized: false
+    };
+  }
+
+  const image = new Image();
+  image.src = originalDataUrl;
+  await new Promise((resolve, reject) => {
+    image.addEventListener("load", resolve, { once: true });
+    image.addEventListener("error", () => reject(new Error("Could not optimize the screenshot image.")), { once: true });
+  });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { alpha: false });
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+
+  let bestBlob = null;
+  for (const quality of JPEG_QUALITIES) {
+    const blob = await canvasToBlob(canvas, "image/jpeg", quality);
+    bestBlob = blob;
+    if (blob.size <= MAX_GENERATION_IMAGE_BYTES) {
+      break;
+    }
+  }
+
+  const dataUrl = await blobToDataUrl(bestBlob);
+  return {
+    dataUrl,
+    width,
+    height,
+    bytes: bestBlob.size,
+    originalWidth: originalDimensions.width,
+    originalHeight: originalDimensions.height,
+    optimized: true
+  };
+}
+
 async function handleFile(file) {
   if (!file) return;
 
@@ -94,14 +188,21 @@ async function handleFile(file) {
     return;
   }
 
-  screenshotDataUrl = await readFileAsDataUrl(file);
-  const dimensions = await getImageDimensions(screenshotDataUrl);
-  screenshotWidth = dimensions.width;
-  screenshotHeight = dimensions.height;
+  setStatus("Optimizing screenshot for reliable generation...");
+  const optimized = await optimizeScreenshotForGeneration(file);
+  screenshotDataUrl = optimized.dataUrl;
+  screenshotWidth = optimized.width;
+  screenshotHeight = optimized.height;
+  originalScreenshotWidth = optimized.originalWidth;
+  originalScreenshotHeight = optimized.originalHeight;
+  optimizedImageBytes = optimized.bytes;
   generatedHtml = "";
   imagePreview.src = screenshotDataUrl;
   compareImage.src = screenshotDataUrl;
-  fileName.textContent = `${file.name} (${screenshotWidth}x${screenshotHeight}, ${Math.round(file.size / 1024)} KB)`;
+  const optimizedNote = optimized.optimized
+    ? ` optimized from ${originalScreenshotWidth}x${originalScreenshotHeight} / ${Math.round(file.size / 1024)} KB`
+    : "";
+  fileName.textContent = `${file.name} (${screenshotWidth}x${screenshotHeight}, ${Math.round(optimizedImageBytes / 1024)} KB${optimizedNote})`;
   imagePreviewCard.hidden = false;
   updatePreviewViewport();
   htmlPreview.srcdoc = "";
@@ -111,7 +212,7 @@ async function handleFile(file) {
   downloadButton.disabled = true;
   refineButton.disabled = true;
   generateButton.disabled = false;
-  setStatus("Screenshot loaded. Add optional notes, then generate.", "success");
+  setStatus("Screenshot optimized and loaded. Add optional notes, then generate.", "success");
 }
 
 function showTab(tabName) {
@@ -243,7 +344,7 @@ async function requestGeneration({ refine = false } = {}) {
     setStatus(refine ? "HTML refined successfully." : "Landing page HTML generated successfully.", "success");
   } catch (error) {
     if (error instanceof TypeError) {
-      setStatus("The browser lost the generation connection. Try turning off Deep analysis mode or upload a smaller screenshot.", "error");
+      setStatus("The browser lost the generation connection. The screenshot was optimized first; if this repeats, turn off Deep analysis mode and try a shorter screenshot crop.", "error");
     } else {
       setStatus(error.message, "error");
     }
