@@ -346,7 +346,13 @@ async function requestGeneration({ refine = false } = {}) {
     if (error instanceof TypeError) {
       setStatus("The browser lost the generation connection. The screenshot was optimized first; if this repeats, turn off Deep analysis mode and try a shorter screenshot crop.", "error");
     } else {
-      setStatus(error.message, "error");
+      const blankOutput = /blank-looking|blank|white page/i.test(error.message);
+      setStatus(
+        blankOutput
+          ? `${error.message} Add notes like "dark text on white background, hero headline at top, blue CTA button, three cards below" and generate again.`
+          : error.message,
+        "error"
+      );
     }
   } finally {
     setBusy(false);

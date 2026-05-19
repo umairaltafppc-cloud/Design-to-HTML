@@ -132,7 +132,19 @@ test("isLikelyBlankHtml detects empty or plain white output", () => {
     true
   );
   assert.equal(
+    isLikelyBlankHtml("<!doctype html><html><head><style>body{background:#fff;color:#fff}.hero{padding:40px}</style></head><body><main class=\"hero\"><h1>Invisible hero</h1><p>White text</p></main></body></html>"),
+    true
+  );
+  assert.equal(
+    isLikelyBlankHtml("<!doctype html><html><head><style>.hero{display:none;background:#111;color:#fff}</style></head><body><main class=\"hero\"><h1>Hidden hero</h1></main></body></html>"),
+    true
+  );
+  assert.equal(
     isLikelyBlankHtml("<!doctype html><html><head><style>.hero{background:#111;color:#fff;padding:48px}.cta{border:1px solid #fff}</style></head><body><main class=\"hero\"><h1>Launch faster</h1><button class=\"cta\">Get started</button></main></body></html>"),
+    false
+  );
+  assert.equal(
+    isLikelyBlankHtml("<!doctype html><html><head><style>body{background:white;color:#111}.hero{padding:48px;border:1px solid #ddd}</style></head><body><main class=\"hero\"><h1>Visible light design</h1><p>Dark text on white is valid.</p></main></body></html>"),
     false
   );
 });

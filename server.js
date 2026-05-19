@@ -138,6 +138,9 @@ Fidelity requirements:
 - Before writing code, silently analyze the screenshot as a visual spec: section order, exact text, colors, spacing, typography, assets, and component dimensions.
 - Match the screenshot's visible landing-page artboard first; avoid inventing new content or changing the composition.
 - The rendered first viewport must never be blank or plain white unless the screenshot itself is blank. Include visible text, sections, cards, buttons, images/placeholders, or decorative shapes from the screenshot.
+- Place visible content at the top-left/top-center of the artboard immediately; do not push all content below the first viewport or outside the viewport.
+- Avoid white-on-white or transparent-on-white content. If the design background is white, use dark visible text, borders, shadows, images/placeholders, and section contrast matching the screenshot.
+- Do not hide primary content with display:none, visibility:hidden, opacity:0, zero-sized containers, negative z-index, or offscreen transforms.
 - Preserve all visible text exactly when readable, including line breaks and CTA labels.
 - When screenshot dimensions are provided, create a top-level artboard/page frame that is exactly that width and height in CSS pixels. The design must match at that viewport size.
 - Use absolute positioning only where it improves visual fidelity. Otherwise use CSS grid/flex with explicit pixel measurements inferred from the screenshot.
@@ -253,19 +256,33 @@ function isLikelyBlankHtml(html) {
   const hasCommonContent = /<(h[1-6]|p|a|button|section|article|main|nav|header|footer|span|div)\b/i.test(bodyHtml);
   const hasVisualCss = /(background|gradient|box-shadow|border|color|transform|position|display\s*:|grid|flex|width\s*:|height\s*:)/i.test(html);
   const hasOnlyWhitespaceBody = bodyHtml.replace(/<!--[\s\S]*?-->/g, "").replace(/&nbsp;/g, "").trim().length === 0;
-  const hasMostlyEmptyWhitePage = /background(?:-color)?\s*:\s*(white|#fff|#ffffff|rgb\(255,\s*255,\s*255\))/i.test(html)
-    && visibleText.length < 12
+  const hasWhiteBackground = /background(?:-color)?\s*:\s*(white|#fff(?:fff)?\b|rgb\(255,\s*255,\s*255\)|rgba\(255,\s*255,\s*255,\s*(?:1|1\.0)\))/i.test(html);
+  const hasWhiteText = /color\s*:\s*(white|#fff(?:fff)?\b|rgb\(255,\s*255,\s*255\)|rgba\(255,\s*255,\s*255,\s*(?:1|1\.0)\))/i.test(html);
+  const hasDarkText = /color\s*:\s*(black|#000(?:000)?\b|#1[0-9a-f]{2,5}\b|#2[0-9a-f]{2,5}\b|#3[0-9a-f]{2,5}\b|rgb\(\s*(?:[0-8]?\d|9[0-9]|1[01][0-9]|12[0-8])\s*,\s*(?:[0-8]?\d|9[0-9]|1[01][0-9]|12[0-8])\s*,\s*(?:[0-8]?\d|9[0-9]|1[01][0-9]|12[0-8])\s*\))/i.test(html);
+  const hasVisibleEffects = /(box-shadow|text-shadow|border\s*:|background\s*:\s*(?!\s*(?:white|#fff|#ffffff)\b)|gradient|filter\s*:)/i.test(html);
+  const hidesContent = /(display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0(?:\.0+)?\b|width\s*:\s*0\b|height\s*:\s*0\b|z-index\s*:\s*-\d|transform\s*:\s*translate(?:x|y)?\(\s*-\d{3,})/i.test(html);
+  const contentLikelyInvisible = hasEnoughVisibleText
+    && hasWhiteBackground
+    && hasWhiteText
+    && !hasDarkText
+    && !hasVisibleEffects
     && !hasMediaOrShapes;
+  const hasMostlyEmptyWhitePage = hasWhiteBackground
+    && visibleText.length < 24
+    && !hasMediaOrShapes
+    && !hasVisibleEffects;
 
   return hasOnlyWhitespaceBody
     || (!hasEnoughVisibleText && !hasMediaOrShapes && !hasCommonContent)
     || (!hasVisualCss && !hasEnoughVisibleText)
-    || hasMostlyEmptyWhitePage;
+    || hasMostlyEmptyWhitePage
+    || contentLikelyInvisible
+    || hidesContent;
 }
 
 function buildBlankRetryInstructions(instructions = "") {
   const prefix = instructions ? `${instructions}\n\n` : "";
-  return `${prefix}The previous HTML rendered as a blank white page. Regenerate the landing page so the first viewport contains visible, high-contrast content matching the screenshot: header/navigation, hero section, readable text, CTA buttons, cards/images/placeholders, backgrounds, borders, and spacing. Do not return an empty body, a plain white page, or invisible white-on-white content.`;
+  return `${prefix}The previous HTML rendered as a blank white or invisible page. Regenerate the landing page so the first viewport contains visible, high-contrast content matching the screenshot: header/navigation, hero section, readable text, CTA buttons, cards/images/placeholders, backgrounds, borders, and spacing. Place visible content at the top of the artboard. Do not return an empty body, a plain white page, white text on a white background, transparent content, hidden content, or content positioned outside the viewport.`;
 }
 
 async function postOpenAIRequest({ payload, apiKey, fetchImpl }) {
